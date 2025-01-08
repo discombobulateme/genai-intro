@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Assistant</title>
+  <script src="https://unpkg.com/htmx.org@1.9.3"></script>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <h1>Ask Your Assistant</h1>
+
+  <div id="container">
+    <!-- File upload with status updates -->
+    <form hx-post="/upload" hx-target="#fileStatus" hx-trigger="change from:file">
+      <input type="file" name="file" accept=".pdf" required>
+      <div id="fileStatus"></div>
+    </form>
+
+    <!-- Question input and response -->
+    <form hx-post="/ask" hx-target="#response">
+      <textarea name="question" rows="4" placeholder="Ask a question..." required></textarea>
+      <button type="submit">Submit</button>
+    </form>
+
+    <!-- Dynamic response area -->
+    <div id="response"></div>
+  </div>
+
+</body>
+</html>
