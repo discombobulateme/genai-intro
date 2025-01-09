@@ -1,60 +1,143 @@
+/* General Styles */
 body {
-  font-family: Arial, sans-serif;
-  background-color: #f4f7f6;
+  font-family: 'Roboto', Arial, sans-serif;
+  background-color: #273030;
   color: #333;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
-  margin: 0;
+  min-height: 100vh;
 }
+
 h1 {
-  color: #4CAF50;
+  color: #dc7eb4;
+  font-size: 2.5rem;
+  text-align: center;
+  margin-bottom: 20px;
 }
+
+/* Container */
 #container {
-  width: 80%;
-  max-width: 800px;
-  padding: 20px;
-  background-color: white;
+  background-color: #85838373;
   border-radius: 10px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  max-width: 600px;
+  width: 90%;
+  margin: 0 auto;
 }
-textarea, input[type="file"], button {
-  width: 100%;
-  padding: 10px;
-  margin: 10px 0;
-  border-radius: 5px;
-  border: 1px solid #ddd;
-  font-size: 1rem;
-}
+
+/* Input and Button Styles */
+textarea,
+input[type="file"],
 button {
-  background-color: #4CAF50;
+  width: 100%;
+  padding: 12px 15px;
+  margin: 10px 0;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 1rem;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+textarea {
+  resize: none;
+  height: 100px;
+}
+
+input[type="file"] {
+  padding: 5px;
+  cursor: pointer;
+}
+
+button {
+  background-color: #5c4caf;
   color: white;
   border: none;
+  font-weight: bold;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.3s ease, transform 0.2s ease;
 }
+
+button:hover {
+  background-color: #16e921;
+  transform: translateY(-2px);
+}
+
 button:disabled {
-  background-color: #cccccc;
+  background-color: #b91212;
   cursor: not-allowed;
 }
+
+/* Focus State */
+textarea:focus,
+input[type="file"]:focus {
+  border-color: #4CAF50;
+  box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+}
+
+/* File Status */
+#fileStatus {
+  color: #4CAF50;
+  font-size: 0.9rem;
+  margin: 5px 0 15px;
+  font-style: italic;
+  text-align: center;
+}
+
+/* Response Area */
 #response {
   margin-top: 20px;
   padding: 15px;
-  background-color: #f0f0f0;
+  background-color: #f9f9f9;
   border-radius: 5px;
+  border: 1px solid #ddd;
   max-height: 300px;
   overflow-y: auto;
-  font-size: 1.1rem;
+  font-size: 1rem;
+  color: #333;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
 }
+
 .qna {
   margin-bottom: 15px;
 }
+
 .qna .question {
   font-weight: bold;
-  font-size: 1.2rem;
+  color: #333;
+  margin-bottom: 5px;
 }
+
 .qna .answer {
   margin-left: 10px;
+  color: #666;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  h1 {
+    font-size: 2rem;
+  }
+
+  #container {
+    padding: 15px;
+  }
+
+  textarea,
+  input[type="file"],
+  button {
+    font-size: 0.9rem;
+    padding: 10px;
+  }
+
+  #response {
+    font-size: 0.9rem;
+  }
 }
