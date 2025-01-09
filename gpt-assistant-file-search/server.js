@@ -28,8 +28,7 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(express.static(publicPath))
 
-// Also add preflight handling
-app.options('*', cors(corsOptions)); // enable pre-flight for all routes
+app.options('*', cors(corsOptions));
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 const openai = new OpenAI({
@@ -37,9 +36,9 @@ const openai = new OpenAI({
 })
 
 let assistantId = null
-let vectorStoreId = null
-let threadId = null
 let pollingInterval
+let threadId = null
+let vectorStoreId = null
 
 
 const uploadDir = path.join(__dirname, 'uploads')
@@ -49,7 +48,11 @@ if (!fs.existsSync(uploadDir)) {
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/')
+    const uploadPath = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath); // Ensure the 'uploads' directory exists
+    }
+    cb(null, uploadPath);
   },
   filename: function (req, file, cb) {
     const ext = path.extname(file.originalname)
@@ -73,31 +76,32 @@ async function createAssistant() {
 async function uploadPDFToVectorStore(filePath) {
   try {
     const fileData = await openai.files.create({
-      file: fs.createReadStream(filePath),
+      file: fs.createReadStream(filePath), // Pass correct absolute path
       purpose: 'assistants',
-    })
+    });
 
-    console.log(`File uploaded with ID: ${fileData.id}`)
+    console.log(`File uploaded with ID: ${fileData.id}`);
 
     let vectorStore = await openai.beta.vectorStores.create({
       name: 'Document Vector Store',
-    })
+    });
 
     await openai.beta.vectorStores.files.createAndPoll(vectorStore.id, {
       file_id: fileData.id,
-    })
+    });
 
-    console.log(`Vector store created with ID: ${vectorStore.id}`)
-
-    vectorStoreId = vectorStore.id
+    console.log(`Vector store created with ID: ${vectorStore.id}`);
+    vectorStoreId = vectorStore.id;
 
     await openai.beta.assistants.update(assistantId, {
       tool_resources: { file_search: { vector_store_ids: [vectorStoreId] } },
-    })
-    console.log(`Assistant updated with Vector Store ID: ${vectorStoreId}`)
-    return vectorStoreId
+    });
+
+    console.log(`Assistant updated with Vector Store ID: ${vectorStoreId}`);
+    return vectorStoreId;
   } catch (error) {
-    console.error('Error uploading file or creating vector store:', error.message)
+    console.error('Error uploading file or creating vector store:', error.message);
+    throw error;
   }
 }
 
@@ -146,20 +150,26 @@ async function checkingStatus(res, threadId, runId) {
       let answers = []
 
       answersList.data.forEach(message => {
-        console.log('message.content', message.content)
-
         if (message.role === 'assistant') {
           message.content.forEach(contentItem => {
             if (contentItem.type === 'text') {
               let cleanText = contentItem.text.value.replace(/\【[^】]+】/g, '') 
-              answers.push(cleanText.trim())
+              // Convert line breaks to <br> tags and format paragraphs
+              cleanText = cleanText.split('\n').map(para => 
+                `<p>${para.trim()}</p>`
+              ).join('')
+              answers.push(cleanText)
             }
           })
         }
       })
-      console.log('answers  => ', answers)
-      const lastAnswer = answers.length > 0 ? answers[0] : 'Oh thats embarassing, I dont know the answer to that.'
-      res.json({ answers: [lastAnswer] })
+      
+      const lastAnswer = answers.length > 0 
+        ? answers[0] 
+        : '<p>Oh that\'s embarrassing, I don\'t know the answer to that.</p>'
+      
+      // Send HTML response instead of JSON
+      res.send(lastAnswer)
     }
   } catch (error) {
     console.error('Error checking status or retrieving messages:', error.message)
@@ -168,9 +178,9 @@ async function checkingStatus(res, threadId, runId) {
 }
 
 app.post('/ask', async (req, res) => {
-  console.log('Headers:', req.headers);
-  console.log('Body:', req.body);
-  console.log('Raw body:', req.rawBody);
+  // console.log('Headers:', req.headers);
+  // console.log('Body:', req.body);
+  // console.log('Raw body:', req.rawBody);
   
   try {
     const { question } = req.body;
@@ -208,25 +218,21 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   res.header('Access-Control-Allow-Origin', '*');
   const file = req.file;
 
-  // Check if a file is provided
   if (!file) {
     return res.status(400).json({ error: 'No file uploaded.' });
   }
 
   // Validate file type
   if (file.mimetype !== 'application/pdf') {
-    // Remove the file if it was saved but is invalid
-    fs.unlinkSync(file.path);
+    fs.unlinkSync(req.file.path); // Directly use `req.file.path`
     return res.status(400).json({ error: 'Invalid file type. Only PDF files are allowed.' });
   }
 
-  const filePath = path.join(__dirname, file.path);
-  console.log(`File uploaded to: ${filePath}`);
+  console.log(`File uploaded to: ${file.path}`);
 
   try {
-    await uploadPDFToVectorStore(filePath);
-    // Remove the file after processing
-    fs.unlinkSync(filePath);
+    await uploadPDFToVectorStore(file.path); // Pass the correct absolute path
+    fs.unlinkSync(file.path); // Remove file after processing
 
     res.json({ message: 'File uploaded and processed successfully.' });
   } catch (error) {
