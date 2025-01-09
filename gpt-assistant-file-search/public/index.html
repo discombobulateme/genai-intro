@@ -15,14 +15,13 @@
 
     <!-- File Upload Form -->
     <form id="uploadForm">
-      <label for="fileInput">Upload a PDF file:</label>
       <input id="fileInput" type="file" name="file" accept=".pdf" required>
-      <button type="button" id="uploadButton">Upload</button>
+      <button type="button" id="uploadButton">Upload a PDF file</button>
       <div id="fileStatus"></div>
     </form>
 
 
-    <!-- Question input and response -->
+    <!-- Question Form -->
     <form hx-post="/ask" 
           hx-target="#response"
           hx-headers='{"Content-Type": "application/json"}'
@@ -30,9 +29,18 @@
           hx-ext="json-enc"
           hx-on::after-request="console.log('Request:', event.detail.xhr)"
           hx-on:htmx:error="console.log('Error:', event.detail.xhr.status, event.detail.xhr.responseText)">
-      <textarea name="question" rows="4" placeholder="What would you like to know about this document?" required></textarea>
+      <textarea 
+        name="question" 
+        rows="4" 
+        placeholder="What would you like to know about this document?" 
+        required>
+      </textarea>
       <button id="submitButton" type="submit" disabled>Submit</button>
     </form>
+
+    <!-- Cleanup Button -->
+    <button id="cleanupButton" type="button">End Session</button>
+    <div id="cleanupStatus"></div>
 
     <!-- Dynamic response area -->
     <div id="response"></div>
@@ -41,17 +49,19 @@
   <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
 
   <script>
-    // Validates the file upload and updates the status
     document.addEventListener("DOMContentLoaded", () => {
       const fileInput = document.getElementById("fileInput");
       const uploadButton = document.getElementById("uploadButton");
       const fileStatus = document.getElementById("fileStatus");
       const submitButton = document.getElementById("submitButton");
+      const cleanupButton = document.getElementById("cleanupButton");
+      const cleanupStatus = document.getElementById("cleanupStatus");
 
+      // File upload logic
       uploadButton.addEventListener("click", async () => {
         const file = fileInput.files[0];
 
-        // Reset the status message
+        // Reset status
         fileStatus.textContent = "";
         submitButton.disabled = true;
 
@@ -65,7 +75,6 @@
           return;
         }
 
-        // Show uploading message
         fileStatus.textContent = "Uploading...";
 
         const formData = new FormData();
@@ -81,13 +90,36 @@
 
           if (response.ok) {
             fileStatus.textContent = "File uploaded successfully.";
-            submitButton.disabled = false; // Enable the submit button after successful upload
+            submitButton.disabled = false; // Enable submit button after successful upload
           } else {
             fileStatus.textContent = result.error || "Failed to upload the file.";
           }
         } catch (error) {
           fileStatus.textContent = "An error occurred during upload.";
           console.error("Upload error:", error);
+        }
+      });
+
+      // Cleanup logic
+      cleanupButton.addEventListener("click", async () => {
+        cleanupStatus.textContent = "Cleaning up...";
+
+        try {
+          const response = await fetch("/cleanup", {
+            method: "POST",
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            cleanupStatus.textContent = result.message || "Cleanup successful.";
+            submitButton.disabled = true; // Disable the submit button after cleanup
+          } else {
+            cleanupStatus.textContent = result.error || "Failed to cleanup files.";
+          }
+        } catch (error) {
+          cleanupStatus.textContent = "An error occurred during cleanup.";
+          console.error("Cleanup error:", error);
         }
       });
     });
