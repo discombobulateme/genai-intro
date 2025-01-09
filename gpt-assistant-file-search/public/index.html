@@ -3,30 +3,152 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PDF Assistant</title>
+  <title>GPT Assistant</title>
   <script src="https://unpkg.com/htmx.org@1.9.3"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-  <h1>Ask Your Assistant</h1>
+  <h1>GPT Assistant File Search</h1>
 
   <div id="container">
-    <!-- File upload with status updates -->
-    <form hx-post="/upload" hx-target="#fileStatus" hx-trigger="change from:file">
-      <input type="file" name="file" accept=".pdf" required>
+
+    <!-- File Upload Form -->
+    <form id="uploadForm" enctype="multipart/form-data">
+      <input id="fileInput" type="file" name="file" accept=".pdf" required>
+      <button type="button" id="uploadButton">Upload a PDF file</button>
       <div id="fileStatus"></div>
     </form>
 
-    <!-- Question input and response -->
-    <form hx-post="/ask" hx-target="#response">
-      <textarea name="question" rows="4" placeholder="Ask a question..." required></textarea>
-      <button type="submit">Submit</button>
+    <!-- Question Form -->
+    <form id="questionForm" hx-post="/ask" 
+          hx-target="#response"
+          hx-headers='{"Content-Type": "application/json"}'
+          hx-trigger="submit"
+          hx-ext="json-enc"
+          hx-on::after-request="console.log('Request:', event.detail.xhr)"
+          hx-on:htmx:error="console.log('Error:', event.detail.xhr.status, event.detail.xhr.responseText)">
+      <textarea 
+        name="question" 
+        rows="4" 
+        placeholder="What would you like to know about this document?" 
+        required>
+      </textarea>
+      <button id="submitButton" type="submit" disabled>Submit</button>
     </form>
+
+    <!-- Cleanup Button -->
+    <button id="cleanupButton" type="button" disabled>End Session</button>
+    <div id="cleanupStatus"></div>
 
     <!-- Dynamic response area -->
     <div id="response"></div>
   </div>
+
+  <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+    const fileInput = document.getElementById("fileInput");
+    const uploadButton = document.getElementById("uploadButton");
+    const fileStatus = document.getElementById("fileStatus");
+    const submitButton = document.getElementById("submitButton");
+    const cleanupButton = document.getElementById("cleanupButton");
+    const cleanupStatus = document.getElementById("cleanupStatus");
+    const responseDiv = document.getElementById("response");
+    const questionForm = document.getElementById("questionForm");
+    const questionTextarea = questionForm.querySelector("textarea");
+
+    // File upload logic
+    uploadButton.addEventListener("click", async () => {
+      const file = fileInput.files[0];
+
+      // Debugging: Log the selected file
+      console.log("Selected file:", file);
+
+      // Reset status
+      fileStatus.textContent = "";
+      submitButton.disabled = true;
+
+      if (!file) {
+        fileStatus.textContent = "Please select a file.";
+        return;
+      }
+
+      if (file.type !== "application/pdf") {
+        fileStatus.textContent = "Invalid file type. Only PDF files are allowed.";
+        return;
+      }
+
+      fileStatus.textContent = "Uploading...";
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const response = await fetch("/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          fileStatus.textContent = "File uploaded successfully.";
+          uploadButton.disabled = true; // Disable upload button
+          submitButton.disabled = false; // Enable submit button
+          cleanupButton.disabled = false; // Enable cleanup button
+        } else {
+          fileStatus.textContent = result.error || "Failed to upload the file.";
+        }
+      } catch (error) {
+        fileStatus.textContent = "An error occurred during upload.";
+        console.error("Upload error:", error);
+      }
+    });
+
+    // Show progress for question submission
+    questionForm.addEventListener("submit", (event) => {
+      responseDiv.textContent = "Processing your question...";
+    });
+
+    // Cleanup logic
+    cleanupButton.addEventListener("click", async () => {
+      cleanupStatus.textContent = "Cleaning up...";
+
+      try {
+        const response = await fetch("/cleanup", {
+          method: "POST",
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          cleanupStatus.textContent = result.message || "Cleanup successful.";
+
+          // Reset to initial state
+          fileInput.value = ""; 
+          fileStatus.textContent = ""; 
+          cleanupStatus.textContent = ""; 
+          responseDiv.textContent = ""; 
+          uploadButton.disabled = false; 
+          submitButton.disabled = true; 
+          cleanupButton.disabled = true;
+
+          // Reset the question form
+          questionTextarea.value = '';
+          questionTextarea.placeholder = 'What would you like to know about this document?';
+
+        } else {
+          cleanupStatus.textContent = result.error || "Failed to cleanup files.";
+        }
+      } catch (error) {
+        cleanupStatus.textContent = "An error occurred during cleanup.";
+        console.error("Cleanup error:", error);
+      }
+    });
+  });
+  </script>
 
 </body>
 </html>
