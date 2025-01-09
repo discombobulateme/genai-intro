@@ -39,6 +39,7 @@ let assistantId = null
 let pollingInterval
 let threadId = null
 let vectorStoreId = null
+let currentUploadedFilePath = null
 
 
 const uploadDir = path.join(__dirname, 'uploads')
@@ -76,7 +77,7 @@ async function createAssistant() {
 async function uploadPDFToVectorStore(filePath) {
   try {
     const fileData = await openai.files.create({
-      file: fs.createReadStream(filePath), // Pass correct absolute path
+      file: fs.createReadStream(filePath), 
       purpose: 'assistants',
     });
 
@@ -178,10 +179,6 @@ async function checkingStatus(res, threadId, runId) {
 }
 
 app.post('/ask', async (req, res) => {
-  // console.log('Headers:', req.headers);
-  // console.log('Body:', req.body);
-  // console.log('Raw body:', req.rawBody);
-  
   try {
     const { question } = req.body;
     
@@ -224,20 +221,42 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 
   // Validate file type
   if (file.mimetype !== 'application/pdf') {
-    fs.unlinkSync(req.file.path); // Directly use `req.file.path`
+    fs.unlinkSync(req.file.path);
     return res.status(400).json({ error: 'Invalid file type. Only PDF files are allowed.' });
   }
 
+  // Clean up previous file if it exists
+  if (currentUploadedFilePath && fs.existsSync(currentUploadedFilePath)) {
+    fs.unlinkSync(currentUploadedFilePath);
+  }
+
   console.log(`File uploaded to: ${file.path}`);
+  currentUploadedFilePath = file.path;
 
   try {
-    await uploadPDFToVectorStore(file.path); // Pass the correct absolute path
-    fs.unlinkSync(file.path); // Remove file after processing
+    await uploadPDFToVectorStore(file.path);
+    // Remove the fs.unlinkSync(file.path) line here to keep the file
 
     res.json({ message: 'File uploaded and processed successfully.' });
   } catch (error) {
     console.error('Error processing file:', error);
     res.status(500).json({ error: 'Failed to process file.' });
+  }
+});
+
+// Add a new endpoint to clean up when the session ends
+app.post('/cleanup', (req, res) => {
+  if (currentUploadedFilePath && fs.existsSync(currentUploadedFilePath)) {
+    try {
+      fs.unlinkSync(currentUploadedFilePath);
+      currentUploadedFilePath = null;
+      res.json({ message: 'Cleanup successful' });
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+      res.status(500).json({ error: 'Failed to cleanup files' });
+    }
+  } else {
+    res.json({ message: 'No files to cleanup' });
   }
 });
 
