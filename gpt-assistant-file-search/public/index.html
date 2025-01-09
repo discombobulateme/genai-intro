@@ -9,16 +9,18 @@
 </head>
 <body>
 
-  <h1>Ask Your Assistant</h1>
+  <h1>GPT Assistant File Search</h1>
 
   <div id="container">
-    <!-- File upload with status updates -->
-    <form hx-post="http://localhost:3000/upload" 
-          hx-target="#fileStatus" 
-          hx-trigger="change from:file">
-      <input type="file" name="file" accept=".pdf" required>
+
+    <!-- File Upload Form -->
+    <form id="uploadForm">
+      <label for="fileInput">Upload a PDF file:</label>
+      <input id="fileInput" type="file" name="file" accept=".pdf" required>
+      <button type="button" id="uploadButton">Upload</button>
       <div id="fileStatus"></div>
     </form>
+
 
     <!-- Question input and response -->
     <form hx-post="/ask" 
@@ -28,9 +30,8 @@
           hx-ext="json-enc"
           hx-on::after-request="console.log('Request:', event.detail.xhr)"
           hx-on:htmx:error="console.log('Error:', event.detail.xhr.status, event.detail.xhr.responseText)">
-      <textarea name="question" rows="4" placeholder="Ask a question..." required></textarea>
-      <button type="submit">Submit</button>
-      <div id="response"></div>
+      <textarea name="question" rows="4" placeholder="What would you like to know about this document?" required></textarea>
+      <button id="submitButton" type="submit" disabled>Submit</button>
     </form>
 
     <!-- Dynamic response area -->
@@ -38,6 +39,59 @@
   </div>
 
   <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
+
+  <script>
+    // Validates the file upload and updates the status
+    document.addEventListener("DOMContentLoaded", () => {
+      const fileInput = document.getElementById("fileInput");
+      const uploadButton = document.getElementById("uploadButton");
+      const fileStatus = document.getElementById("fileStatus");
+      const submitButton = document.getElementById("submitButton");
+
+      uploadButton.addEventListener("click", async () => {
+        const file = fileInput.files[0];
+
+        // Reset the status message
+        fileStatus.textContent = "";
+        submitButton.disabled = true;
+
+        if (!file) {
+          fileStatus.textContent = "Please select a file.";
+          return;
+        }
+
+        if (file.type !== "application/pdf") {
+          fileStatus.textContent = "Invalid file type. Only PDF files are allowed.";
+          return;
+        }
+
+        // Show uploading message
+        fileStatus.textContent = "Uploading...";
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+          const response = await fetch("/upload", {
+            method: "POST",
+            body: formData,
+          });
+
+          const result = await response.json();
+
+          if (response.ok) {
+            fileStatus.textContent = "File uploaded successfully.";
+            submitButton.disabled = false; // Enable the submit button after successful upload
+          } else {
+            fileStatus.textContent = result.error || "Failed to upload the file.";
+          }
+        } catch (error) {
+          fileStatus.textContent = "An error occurred during upload.";
+          console.error("Upload error:", error);
+        }
+      });
+    });
+  </script>
 
 </body>
 </html>
