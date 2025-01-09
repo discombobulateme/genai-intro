@@ -1,15 +1,35 @@
-import path from 'path'
-import express from 'express'
-import OpenAI from 'openai'
+import cors from 'cors';
 import dotenv from 'dotenv'
+import express from 'express'
 import fs from 'fs'
+import path from 'path'
 import multer from 'multer'
+import OpenAI from 'openai'
 import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const publicPath = path.join(__dirname, 'public')
 
 dotenv.config()
 const app = express()
-app.use(express.static('public'))
+
+// middleware
+const corsOptions = {
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    credentials: true,
+    optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
+app.use(express.static(publicPath))
+
+// Also add preflight handling
+app.options('*', cors(corsOptions)); // enable pre-flight for all routes
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 const openai = new OpenAI({
@@ -21,8 +41,6 @@ let vectorStoreId = null
 let threadId = null
 let pollingInterval
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
 
 const uploadDir = path.join(__dirname, 'uploads')
 if (!fs.existsSync(uploadDir)) {
@@ -38,6 +56,7 @@ const storage = multer.diskStorage({
     cb(null, file.fieldname + '-' + Date.now() + ext)
   },
 })
+
 const upload = multer({ storage: storage })
 
 async function createAssistant() {
@@ -90,12 +109,18 @@ async function createThread() {
 }
 
 async function addQuestion(threadId, question) {
-  console.log('Adding a new message to thread: ' + threadId)
+  console.log('Adding a new message to thread: ' + threadId);
+
+  if (!question || typeof question !== 'string') {
+    throw new Error("Don't you want to ask me something?");
+  }
+
   const response = await openai.beta.threads.messages.create(threadId, {
     role: 'user',
     content: question,
-  })
-  return response
+  });
+
+  return response;
 }
 
 async function runAssistant(threadId) {
@@ -126,14 +151,14 @@ async function checkingStatus(res, threadId, runId) {
         if (message.role === 'assistant') {
           message.content.forEach(contentItem => {
             if (contentItem.type === 'text') {
-              let cleanText = contentItem.text.value.replace(/\【[^】]+】/g, '') // Citation removed like【4:0†source】
+              let cleanText = contentItem.text.value.replace(/\【[^】]+】/g, '') 
               answers.push(cleanText.trim())
             }
           })
         }
       })
       console.log('answers  => ', answers)
-      const lastAnswer = answers.length > 0 ? answers[0] : 'No answer found.'
+      const lastAnswer = answers.length > 0 ? answers[0] : 'Oh thats embarassing, I dont know the answer to that.'
       res.json({ answers: [lastAnswer] })
     }
   } catch (error) {
@@ -143,46 +168,72 @@ async function checkingStatus(res, threadId, runId) {
 }
 
 app.post('/ask', async (req, res) => {
-  const { question } = req.body
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
+  console.log('Raw body:', req.rawBody);
+  
   try {
-    if (!threadId) {
-      console.log('Creating a new thread...')
-      const thread = await createThread()
-      threadId = thread.id
-      console.log(`New thread created with ID: ${threadId}`)
+    const { question } = req.body;
+    
+    if (!question) {
+      console.log('Missing question parameter');
+      return res.status(400).json({ error: 'Missing question parameter' });
     }
-    await addQuestion(threadId, question)
 
-    const run = await runAssistant(threadId)
-    const runId = run.id
+    if (!threadId) {
+      console.log('Creating a new thread...');
+      const thread = await createThread();
+      threadId = thread.id;
+      console.log(`New thread created with ID: ${threadId}`);
+    }
+
+    // Pass the question to the assistant
+    await addQuestion(threadId, question);
+
+    // Run the assistant
+    const run = await runAssistant(threadId);
+    const runId = run.id;
+
+    // Poll for the assistant's response
     pollingInterval = setInterval(() => {
-      checkingStatus(res, threadId, runId)
-    }, 5000)
+      checkingStatus(res, threadId, runId);
+    }, 5000);
   } catch (error) {
-    console.error('Error in /ask endpoint:', error.message)
-    res.status(500).json({ error: 'Failed to process request.' })
+    console.error('Error processing request:', error);
+    res.status(500).json({ error: error.message });
   }
-})
+});
 
 app.post('/upload', upload.single('file'), async (req, res) => {
-  const file = req.file
+  res.header('Access-Control-Allow-Origin', '*');
+  const file = req.file;
+
+  // Check if a file is provided
   if (!file) {
-    return res.status(400).json({ error: 'No file uploaded.' })
+    return res.status(400).json({ error: 'No file uploaded.' });
   }
 
-  const filePath = path.join(__dirname, file.path)
-  console.log(`File uploaded to: ${filePath}`)
+  // Validate file type
+  if (file.mimetype !== 'application/pdf') {
+    // Remove the file if it was saved but is invalid
+    fs.unlinkSync(file.path);
+    return res.status(400).json({ error: 'Invalid file type. Only PDF files are allowed.' });
+  }
+
+  const filePath = path.join(__dirname, file.path);
+  console.log(`File uploaded to: ${filePath}`);
+
   try {
-    await uploadPDFToVectorStore(filePath)
+    await uploadPDFToVectorStore(filePath);
+    // Remove the file after processing
+    fs.unlinkSync(filePath);
 
-    fs.unlinkSync(filePath)
-
-    res.json({ message: 'File uploaded and processed successfully.' })
+    res.json({ message: 'File uploaded and processed successfully.' });
   } catch (error) {
-    console.error('Error processing file:', error)
-    res.status(500).json({ error: 'Failed to process file.' })
+    console.error('Error processing file:', error);
+    res.status(500).json({ error: 'Failed to process file.' });
   }
-})
+});
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, async () => {
