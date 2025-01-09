@@ -13,20 +13,31 @@
 
   <div id="container">
     <!-- File upload with status updates -->
-    <form hx-post="/upload" hx-target="#fileStatus" hx-trigger="change from:file">
+    <form hx-post="http://localhost:3000/upload" 
+          hx-target="#fileStatus" 
+          hx-trigger="change from:file">
       <input type="file" name="file" accept=".pdf" required>
       <div id="fileStatus"></div>
     </form>
 
     <!-- Question input and response -->
-    <form hx-post="/ask" hx-target="#response">
+    <form hx-post="/ask" 
+          hx-target="#response"
+          hx-headers='{"Content-Type": "application/json"}'
+          hx-trigger="submit"
+          hx-ext="json-enc"
+          hx-on::after-request="console.log('Request:', event.detail.xhr)"
+          hx-on:htmx:error="console.log('Error:', event.detail.xhr.status, event.detail.xhr.responseText)">
       <textarea name="question" rows="4" placeholder="Ask a question..." required></textarea>
       <button type="submit">Submit</button>
+      <div id="response"></div>
     </form>
 
     <!-- Dynamic response area -->
     <div id="response"></div>
   </div>
+
+  <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
 
 </body>
 </html>
