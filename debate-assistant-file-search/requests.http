@@ -1,0 +1,6 @@
+POST http://localhost:3000/ask
+Content-Type: application/json
+
+{
+  "question": "What is a good way to write conversations?"
+}
