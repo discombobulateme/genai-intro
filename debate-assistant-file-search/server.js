@@ -28,12 +28,12 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use(express.static(publicPath))
 
-app.options('*', cors(corsOptions));
-
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
 const openai = new OpenAI({
   apiKey: OPENAI_API_KEY,
 })
+
+let chats = [];
 
 let assistantId = null
 let pollingInterval
@@ -142,6 +142,7 @@ async function runAssistant(threadId) {
   console.log(response)
   return response
 }
+
 async function checkingStatus(res, threadId, runId) {
   try {
     const runObject = await openai.beta.threads.runs.retrieve(threadId, runId);
@@ -196,6 +197,40 @@ async function checkingStatus(res, threadId, runId) {
   }
 }
 
+app.post('/upload', upload, async (req, res) => {
+  const files = req.files;
+  
+  if (!files || Object.keys(files).length === 0) {
+    return res.status(400).json({ error: 'No files uploaded.' });
+  }
+  
+  const fileKeys = ['file1', 'file2', 'file3'];
+
+  // Check for valid file types and process files
+  for (const key of fileKeys) {
+    if (files[key]) {
+      const uploadedFile = files[key][0];
+      if (uploadedFile.mimetype !== 'application/pdf') {
+        fs.unlinkSync(uploadedFile.path); // Cleanup invalid file
+        return res.status(400).json({ error: 'Invalid file type. Only PDF files are allowed.' });
+      }
+    }
+  }
+
+  try {
+    // Process all uploaded files
+    for (const key of fileKeys) {
+      if (files[key]) {
+        await uploadPDFToVectorStore(files[key][0].path);
+      }
+    }
+    res.json({ message: 'Files uploaded and processed successfully.' });
+  } catch (error) {
+    console.error('Error processing files:', error);
+    res.status(500).json({ error: 'Failed to process files.' });
+  }
+});
+
 app.post('/ask', async (req, res) => {
   try {
     const { question } = req.body;
@@ -229,37 +264,33 @@ app.post('/ask', async (req, res) => {
   }
 });
 
-app.post('/upload', upload, async (req, res) => {
-  const files = req.files;
+app.post('/saveChat', (req, res) => {
+  const { chat } = req.body;
+  chats.push(chat); // Save chat to in-memory list
+  res.status(200).send('Chat saved');
+});
 
-  if (!files || Object.keys(files).length === 0) {
-    return res.status(400).json({ error: 'No files uploaded.' });
-  }
+app.post('/excludeChat', (req, res) => {
+  const { chat } = req.body;
+  chats = chats.filter(c => c !== chat); // Exclude chat from list
+  res.status(200).send('Chat excluded');
+});
 
-  const fileKeys = ['file1', 'file2', 'file3'];
-
-  // Check for valid file types and process files
-  for (const key of fileKeys) {
-    if (files[key]) {
-      const uploadedFile = files[key][0];
-      if (uploadedFile.mimetype !== 'application/pdf') {
-        fs.unlinkSync(uploadedFile.path); // Cleanup invalid file
-        return res.status(400).json({ error: 'Invalid file type. Only PDF files are allowed.' });
-      }
-    }
-  }
-
+app.post('/generateEssay', async (req, res) => {
+  const combinedChats = chats.join(' ');
   try {
-    // Process all uploaded files
-    for (const key of fileKeys) {
-      if (files[key]) {
-        await uploadPDFToVectorStore(files[key][0].path);
-      }
-    }
-    res.json({ message: 'Files uploaded and processed successfully.' });
-  } catch (error) {
-    console.error('Error processing files:', error);
-    res.status(500).json({ error: 'Failed to process files.' });
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are an assistant that writes academic essays.' },
+        { role: 'user', content: 'Write a 1000 character academic essay about the following discussions: ' + combinedChats }
+      ],
+      max_tokens: 500
+    });
+    res.status(200).json({ essay: response.choices[0].message.content.trim() });
+  } catch (err) {
+    console.error('Error generating essay:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
