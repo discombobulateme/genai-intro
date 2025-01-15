@@ -6,9 +6,9 @@ document.addEventListener("DOMContentLoaded", () => {
     ];
     const cleanupButton = document.getElementById("cleanupButton");
     const cleanupStatus = document.getElementById("cleanupStatus");
-    const endSessionButton = document.getElementById("endSessionButton");
     const excludeButton = document.getElementById("excludeButton");
     const fileStatus = document.getElementById("fileStatus");
+    const generateEssayButton = document.getElementById("generateEssayButton");
     const questionTextarea = document.querySelector("textarea");
     const responseDiv = document.getElementById("response");
     const saveButton = document.getElementById("saveButton");
@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Enable buttons when appropriate
     function toggleFormButtons(enable) {
       submitButton.disabled = !enable;
-      endSessionButton.disabled = !enable;
+      generateEssayButton.disabled = !enable;
       saveButton.disabled = !enable;
       excludeButton.disabled = !enable;
     }
@@ -139,7 +139,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // End session and generate essay
-    endSessionButton.addEventListener("click", () => {
+    generateEssayButton.addEventListener("click", () => {
       fetch('/generateEssay', {
         method: 'POST',
         headers: {
