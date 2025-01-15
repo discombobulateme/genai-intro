@@ -320,7 +320,6 @@ app.listen(PORT, async () => {
 // TODO: it is not keeping answers to its content
 // TODO: save questions and answers to a database
 // TODO: add a chat history
-// TODO: add a chat history to the assistant
-// TODO: add a chat history to the vector store
-// TODO: add a chat history to the thread
-// TODO: add a chat history to the run
+// TODO: add saves chat to UI
+// TODO: delete uploaded files
+
