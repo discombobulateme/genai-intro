@@ -2,7 +2,7 @@
 
 The Debate Preparation Assistant is a local application that leverages OpenAI’s API to help users prepare for debates by querying content from uploaded PDF files. Users can upload a PDF, and the assistant will answer questions or “debate” based on the PDF’s content.
 
-The assistant processes the PDF, stores it in a vector store, and allows the user to ask questions related to the PDF content. Vector search is used to retrieve relevant content to answer user queries. It is setup as an opaque method, offered by OpenAI tool [Assistant File Search](https://platform.openai.com/docs/assistants/tools/file-search).
+The assistant processes up to 3 PDF files, stores it in a vector store, and allows the user to ask questions related to the PDFs content. Vector search is used to retrieve relevant content to answer user queries. It is setup as an opaque method, offered by OpenAI tool [Assistant File Search](https://platform.openai.com/docs/assistants/tools/file-search).
 
 ## Assistant File Search - beta
 
