@@ -40,22 +40,8 @@
         name="question" 
         rows="4" 
         placeholder="What would you like to know about these documents?" 
-        required>
-      </textarea>
-      <div class="button-group">
-        <button id="saveButton" type="button" disabled>
-          &#x1F4BE;
-        </button>
-        <button id="excludeButton" type="button" disabled>
-          &#x2716;
-        </button>
-      </div>
-      <div class="button-group">
-        <button id="submitButton" type="submit" disabled>Submit</button>
-        <button id="generateEssayButton" type="button" disabled>
-          Generate Essay
-        </button>
-      </div>
+        required></textarea>
+      <button id="submitButton" type="submit" disabled>Submit</button>
     </form>
 
     <!-- Cleanup Button -->
@@ -64,7 +50,38 @@
     </button>
     <div id="cleanupStatus"></div>
     <!-- Dynamic response area -->
-    <div id="response"></div>
+    <div class="response-container">
+        <div id="response"></div>
+        <div class="response-actions">
+            <button id="saveButton" type="button" disabled title="Save Response">
+                &#x1F4BE;
+            </button>
+            <button id="excludeButton" type="button" disabled title="Exclude Response">
+                &#x2716;
+            </button>
+        </div>
+    </div>
+  </div>
+
+  <div class="saved-chats-container">
+    <h3>Saved Responses</h3>
+    <div id="savedChats" class="saved-messages"></div>
+    <button id="generateEssayButton" type="button" disabled class="generate-essay-btn">
+        Generate Essay
+    </button>
+  </div>
+
+  <div id="essayModal" class="modal">
+    <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <h2>Generated Essay</h2>
+        <div id="essayContent"></div>
+        <div class="modal-footer">
+            <button id="downloadPdfButton" class="download-button">
+                Download PDF
+            </button>
+        </div>
+    </div>
   </div>
 
   <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
