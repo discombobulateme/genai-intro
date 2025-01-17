@@ -14,14 +14,37 @@ document.addEventListener("DOMContentLoaded", () => {
     const saveButton = document.getElementById("saveButton");
     const submitButton = document.getElementById("submitButton");
     const uploadButton = document.getElementById("uploadButton");
+    const modal = document.getElementById("essayModal");
+    const closeButton = document.querySelector(".close-button");
 
     // Enable buttons when appropriate
     function toggleFormButtons(enable) {
       submitButton.disabled = !enable;
-      generateEssayButton.disabled = !enable;
-      saveButton.disabled = !enable;
-      excludeButton.disabled = !enable;
+      // Only enable save/exclude buttons after a response is received
+      if (responseDiv.textContent.trim()) {
+          saveButton.disabled = !enable;
+          excludeButton.disabled = !enable;
+      }
+      // Only enable generate essay button if there are saved chats
+      const savedChatsDiv = document.getElementById('savedChats');
+      generateEssayButton.disabled = !(enable && savedChatsDiv.children.length > 0);
     }
+
+    // Add this to handle response updates
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.target === responseDiv && responseDiv.textContent.trim()) {
+                saveButton.disabled = false;
+                excludeButton.disabled = false;
+            }
+        });
+    });
+
+    observer.observe(responseDiv, { 
+        childList: true,
+        characterData: true,
+        subtree: true 
+    });
 
     // File upload logic
     uploadButton.addEventListener("click", async () => {
@@ -99,6 +122,12 @@ document.addEventListener("DOMContentLoaded", () => {
           // Reset the question form
           questionTextarea.value = "";
           questionTextarea.placeholder = "What would you like to know about these documents?";
+
+          // Clear saved responses
+          const savedChatsDiv = document.getElementById('savedChats');
+          savedChatsDiv.innerHTML = '';
+          generateEssayButton.disabled = true;
+
         } else {
           cleanupStatus.textContent = result.error || "Failed to cleanup files.";
         }
@@ -110,17 +139,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Save the current response
     saveButton.addEventListener("click", () => {
-      const currentResponse = responseDiv.textContent;
-      fetch('/saveChat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ chat: currentResponse })
-      })
-      .then(response => response.text())
-      .then(result => console.log('Save result:', result))
-      .catch(error => console.error('Error saving chat:', error));
+        if (!responseDiv.textContent.trim()) return;
+        
+        const currentResponse = responseDiv.innerHTML;
+        const currentQuestion = questionTextarea.value;
+        const timestamp = new Date().toLocaleString();
+        
+        const savedChat = document.createElement('div');
+        savedChat.className = 'saved-chat';
+        savedChat.innerHTML = `
+            <div class="saved-timestamp">${timestamp}</div>
+            <div class="saved-question"><strong>Q:</strong> ${currentQuestion}</div>
+            <div class="saved-answer"><strong>A:</strong> ${currentResponse}</div>
+        `;
+        
+        const savedChatsDiv = document.getElementById('savedChats');
+        savedChatsDiv.insertBefore(savedChat, savedChatsDiv.firstChild);
+        
+        // Enable generate essay button when there are saved chats
+        generateEssayButton.disabled = false;
+        
+        fetch('/saveChat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                question: currentQuestion,
+                answer: currentResponse,
+                timestamp: timestamp
+            })
+        })
+        .then(response => response.text())
+        .then(result => console.log('Save result:', result))
+        .catch(error => console.error('Error saving chat:', error));
     });
 
     // Exclude the current response
@@ -138,19 +190,108 @@ document.addEventListener("DOMContentLoaded", () => {
       .catch(error => console.error('Error excluding chat:', error));
     });
 
-    // End session and generate essay
-    generateEssayButton.addEventListener("click", () => {
-      fetch('/generateEssay', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+    // Close modal when clicking the close button
+    closeButton.onclick = () => {
+        modal.style.display = "none";
+    };
+
+    // Close modal when clicking outside
+    window.onclick = (event) => {
+        if (event.target === modal) {
+            modal.style.display = "none";
         }
-      })
-      .then(response => response.json())
-      .then(data => {
-        responseDiv.innerHTML = `<h2>Generated Essay</h2><p>${data.essay}</p>`;
-        console.log('Essay generated:', data.essay);
-      })
-      .catch(error => console.error('Error generating essay:', error));
+    };
+
+    // Update the essay generation button handler
+    generateEssayButton.addEventListener("click", () => {
+        // Disable button and change text
+        generateEssayButton.disabled = true;
+        generateEssayButton.innerHTML = '&#x23F3; Generating Essay...';
+
+        fetch('/generateEssay', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                // Reset button on error
+                generateEssayButton.disabled = false;
+                generateEssayButton.innerHTML = 'Generate Essay';
+                return;
+            }
+            
+            // Display essay in modal
+            document.getElementById('essayContent').innerHTML = `
+                <div id="printableEssay">
+                    <h1>Generated Essay</h1>
+                    <div class="essay-content">${data.essay}</div>
+                    <p class="essay-footer">Based on ${data.sourcesCount} saved conversations</p>
+                </div>
+            `;
+            modal.style.display = "block";
+            
+            // Reset button after successful generation
+            generateEssayButton.disabled = false;
+            generateEssayButton.innerHTML = 'Generate Essay';
+            
+            // Setup PDF download button
+            const downloadButton = document.getElementById('downloadPdfButton');
+            downloadButton.onclick = () => {
+                const printContent = document.getElementById('printableEssay').innerHTML;
+                const printWindow = window.open('', '_blank');
+                
+                printWindow.document.write(`
+                    <html>
+                    <head>
+                        <title>Generated Essay</title>
+                        <style>
+                            body {
+                                font-family: Arial, sans-serif;
+                                line-height: 1.6;
+                                margin: 40px;
+                            }
+                            h1 {
+                                text-align: center;
+                                color: #333;
+                            }
+                            .essay-content {
+                                margin: 20px 0;
+                                text-align: justify;
+                            }
+                            .essay-footer {
+                                text-align: right;
+                                font-size: 0.9em;
+                                color: #666;
+                                margin-top: 20px;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        ${printContent}
+                    </body>
+                    </html>
+                `);
+                
+                printWindow.document.close();
+                printWindow.focus();
+                
+                // Wait for content to load
+                setTimeout(() => {
+                    printWindow.print();
+                    printWindow.close();
+                }, 250);
+            };
+        })
+        .catch(error => {
+            console.error('Error generating essay:', error);
+            alert('Failed to generate essay. Please try again.');
+            // Reset button on error
+            generateEssayButton.disabled = false;
+            generateEssayButton.innerHTML = 'Generate Essay';
+        });
     });
   });

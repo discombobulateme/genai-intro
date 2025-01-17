@@ -265,8 +265,8 @@ app.post('/ask', async (req, res) => {
 });
 
 app.post('/saveChat', (req, res) => {
-  const { chat } = req.body;
-  chats.push(chat); // Save chat to in-memory list
+  const { question, answer, timestamp } = req.body;
+  chats.push({ question, answer, timestamp }); // Save structured chat to in-memory list
   res.status(200).send('Chat saved');
 });
 
@@ -277,37 +277,100 @@ app.post('/excludeChat', (req, res) => {
 });
 
 app.post('/generateEssay', async (req, res) => {
-  const combinedChats = chats.join(' ');
   try {
+    if (chats.length === 0) {
+      return res.status(400).json({ error: 'No saved conversations to generate essay from.' });
+    }
+
+    // Format the saved conversations into a structured prompt
+    const formattedDiscussions = chats.map(chat => {
+      // Strip HTML tags from answer
+      const cleanAnswer = chat.answer.replace(/<[^>]*>/g, '');
+      return `Question: ${chat.question}\nAnswer: ${cleanAnswer}`;
+    }).join('\n\n');
+
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4', // Update to correct model name
       messages: [
-        { role: 'system', content: 'You are an assistant that writes academic essays.' },
-        { role: 'user', content: 'Write a 1000 character academic essay about the following discussions: ' + combinedChats }
+        { 
+          role: 'system', 
+          content: 'You are an academic writer tasked with synthesizing multiple discussions into a coherent essay. Focus on analyzing the key points and creating logical connections between different ideas.'
+        },
+        { 
+          role: 'user', 
+          content: `Based on the following discussions, write a well-structured academic essay that synthesizes the main points and develops a cohesive argument:\n\n${formattedDiscussions}`
+        }
       ],
-      max_tokens: 500
+      temperature: 0.7,
+      max_tokens: 1000
     });
-    res.status(200).json({ essay: response.choices[0].message.content.trim() });
+
+    const essay = response.choices[0].message.content.trim();
+    res.status(200).json({ 
+      essay: essay,
+      sourcesCount: chats.length
+    });
   } catch (err) {
     console.error('Error generating essay:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to generate essay: ' + err.message });
   }
 });
 
-// Add a new endpoint to clean up when the session ends
+// Update the cleanup endpoint
 app.post('/cleanup', (req, res) => {
-  if (currentUploadedFilePath && fs.existsSync(currentUploadedFilePath)) {
-    try {
-      fs.unlinkSync(currentUploadedFilePath);
-      currentUploadedFilePath = null;
-      res.json({ message: 'Cleanup successful' });
-    } catch (error) {
-      console.error('Error during cleanup:', error);
-      res.status(500).json({ error: 'Failed to cleanup files' });
+  try {
+    // Clear the uploads directory
+    const uploadPath = path.join(__dirname, 'uploads');
+    if (fs.existsSync(uploadPath)) {
+      const files = fs.readdirSync(uploadPath);
+      files.forEach(file => {
+        const filePath = path.join(uploadPath, file);
+        fs.unlinkSync(filePath);
+      });
     }
-  } else {
-    res.json({ message: 'No files to cleanup' });
+
+    // Reset all the state variables
+    assistantId = null;
+    threadId = null;
+    vectorStoreId = null;
+    currentUploadedFilePath = null;
+    chats = [];
+
+    // Clear any running intervals
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+    }
+
+    res.json({ message: 'Cleanup successful' });
+  } catch (error) {
+    console.error('Error during cleanup:', error);
+    res.status(500).json({ error: 'Failed to cleanup files: ' + error.message });
   }
+});
+
+// Add this endpoint for PDF generation
+app.post('/generatePdf', (req, res) => {
+    const { essay, sourcesCount } = req.body;
+    
+    // Create a PDF document
+    const doc = new PDFDocument();
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=generated-essay.pdf');
+    
+    // Pipe the PDF document to the response
+    doc.pipe(res);
+    
+    // Add content to the PDF
+    doc.fontSize(20).text('Generated Essay', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(12).text(essay);
+    doc.moveDown();
+    doc.fontSize(10).text(`Based on ${sourcesCount} saved conversations`, { align: 'right' });
+    
+    // Finalize the PDF
+    doc.end();
 });
 
 const PORT = process.env.PORT || 3000
